@@ -89,6 +89,7 @@ async function renderVersionPdf(versionId: string, site: string, s: Settings) {
     analysisDate: v.analysis_date, method: v.method, mainResult: v.main_result, results: results ?? [],
     hplcImage: await download(v.hplc_image_path), msImage: await download(v.ms_image_path),
     verifyUrl: verifyUrl(site, publicId),
+    clientName: v.client_name, hplcPeaks: v.hplc_peaks, hplcCaption: v.hplc_caption, msCaption: v.ms_caption,
   });
   const path = `${publicId}/v${v.version}-${versionId}.pdf`;
   const { error: up } = await db().storage.from('certificates').upload(path, pdf, { contentType: 'application/pdf', upsert: false });

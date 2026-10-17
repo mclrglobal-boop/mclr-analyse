@@ -32,9 +32,13 @@ export type CertificatePdfInput = {
   method: string;
   mainResult: string | null;
   results: { analyte: string; value: string; unit: string | null; specification: string | null }[];
-  hplcImage?: Uint8Array | null;     // extrait du rapport du laboratoire
-  msImage?: Uint8Array | null;       // extrait du rapport du laboratoire
+  hplcImage?: Uint8Array | null;     // graphique (extrait ou tracé à partir des données du rapport)
+  msImage?: Uint8Array | null;
   verifyUrl: string;
+  clientName?: string | null;        // « Test for » — client final
+  hplcPeaks?: { rt: string; type: string; width: string; area: string; height: string; areaPct: string }[] | null; // texte exact du rapport
+  hplcCaption?: string | null;
+  msCaption?: string | null;
 };
 
 export const DISCLAIMER =
@@ -193,6 +197,7 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
   // ---------- Informations échantillon ----------
   section('Sample information', 'Informations échantillon');
   const pairs: [string, string][] = [
+    ...(input.clientName ? [['Test for / Client', input.clientName] as [string, string]] : []),
     ['Sample / Produit', input.productName],
     ['Lot Number / Lot', input.batchNumber || '—'],
     ['Appearance / Aspect', input.appearance || '—'],
@@ -249,8 +254,29 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
   });
   y -= 16;
 
-  // ---------- Graphiques (extraits du rapport du laboratoire) ----------
-  const figure = (img: PDFImage, en: string, fr: string) => {
+  // ---------- Tableau des pics HPLC (valeurs recopiées du rapport) ----------
+  if (input.hplcPeaks?.length) {
+    ensure(60 + input.hplcPeaks.length * 18);
+    section('HPLC peak table', 'Tableau des pics HPLC');
+    const pc = [['RT [min]', 0.16], ['Type', 0.14], ['Width [min]', 0.16], ['Area', 0.20], ['Height', 0.17], ['Area %', 0.17]] as const;
+    page!.drawRectangle({ x: M, y: y - 20, width: CW, height: 20, color: NAVY_SOFT });
+    let hx = M + 10;
+    pc.forEach(([h, w]) => { text(h, hx, y - 14, 8.5, fBold, NAVY); hx += w * CW; });
+    y -= 20;
+    input.hplcPeaks.forEach((r) => {
+      const vals = [r.rt, r.type, r.width, r.area, r.height, r.areaPct];
+      let x = M + 10;
+      vals.forEach((v, i) => { text(String(v ?? ''), x, y - 13, 9, i === 5 ? fBold : fMono, i === 5 ? NAVY : INK); x += pc[i][1] * CW; });
+      y -= 18;
+      page!.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.5, color: LINE });
+    });
+    y -= 12;
+    text('Valeurs recopiées sans modification depuis le rapport du laboratoire indépendant.', M + 2, y, 7, fReg, MUTED);
+    y -= 18;
+  }
+
+  // ---------- Graphiques ----------
+  const figure = (img: PDFImage, en: string, fr: string, caption?: string | null) => {
     const maxW = CW - 20, maxH = 250;
     const sc = Math.min(maxW / img.width, maxH / img.height);
     const w = img.width * sc, h = img.height * sc;
@@ -259,11 +285,12 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
     page!.drawRectangle({ x: M, y: y - h - 20, width: CW, height: h + 20, borderColor: LINE, borderWidth: 1 });
     page!.drawImage(img, { x: M + (CW - w) / 2, y: y - h - 10, width: w, height: h });
     y -= h + 32;
-    text('Source : extrait du rapport du laboratoire indépendant — reproduit sans modification.', M + 2, y + 4, 7, fReg, MUTED);
-    y -= 12;
+    const cap = wrap(caption || 'Source : extrait du rapport du laboratoire indépendant — reproduit sans modification.', fReg, 7, CW - 4);
+    cap.forEach((l, i) => text(l, M + 2, y + 4 - i * 9, 7, fReg, MUTED));
+    y -= 12 + (cap.length - 1) * 9;
   };
-  if (hplc) figure(hplc, 'HPLC chromatogram', 'Chromatogramme HPLC');
-  if (ms) figure(ms, 'Mass spectrum', 'Spectre de masse');
+  if (hplc) figure(hplc, 'HPLC chromatogram', 'Chromatogramme HPLC', input.hplcCaption);
+  if (ms) figure(ms, 'Mass spectrum', 'Spectre de masse', input.msCaption);
 
   // ---------- Vérification + mentions ----------
   // QR code vectoriel (aucune dépendance image)
