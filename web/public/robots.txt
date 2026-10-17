@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /commande/
+Disallow: /verify/
+Sitemap: https://mclr-analyse.com/sitemap.xml

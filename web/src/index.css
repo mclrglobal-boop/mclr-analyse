@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { @apply bg-paper text-ink antialiased; }
+
+@layer components {
+  .container-x { @apply mx-auto w-full max-w-6xl px-4 sm:px-6; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-primary { @apply btn bg-brand text-white hover:bg-brand-700; }
+  .btn-dark { @apply btn bg-ink text-white hover:bg-ink-800; }
+  .btn-ghost { @apply btn border border-line bg-white text-ink hover:bg-paper; }
+  .btn-danger { @apply btn bg-danger text-white hover:opacity-90; }
+  .card { @apply rounded-xl border border-line bg-white shadow-card; }
+  .label { @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-500; }
+  .input { @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-300 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-100; }
+  .eyebrow { @apply text-xs font-semibold uppercase tracking-[0.16em] text-leaf; }
+  .table { @apply w-full text-left text-sm; }
+  .table th { @apply border-b border-line bg-paper px-3 py-2 text-xs font-semibold uppercase tracking-wide text-ink-500; }
+  .table td { @apply border-b border-line px-3 py-2.5 align-top; }
+  .prose-x h2 { @apply mb-3 mt-8 text-lg font-semibold; }
+  .prose-x p, .prose-x li { @apply leading-relaxed text-ink-700; }
+  .prose-x ul { @apply list-disc space-y-1 pl-5; }
+}

@@ -1,0 +1,29 @@
+# Publie le site sur GitHub Pages (branche gh-pages) à chaque modification de web/
+name: Déployer le site
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', '.github/workflows/deploy.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: { group: pages, cancel-in-progress: true }
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: web } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm, cache-dependency-path: web/package-lock.json }
+      - run: npm ci
+      - run: npm run build
+      - name: Publier sur gh-pages
+        run: |
+          cd dist
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Déploiement ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
