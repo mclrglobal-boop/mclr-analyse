@@ -16,5 +16,5 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
 }
 
 export function useTitle(title: string) {
-  useEffect(() => { document.title = title ? `${title} · MCLR` : 'MCLR — Analyses et vérification de résultats'; }, [title]);
+  useEffect(() => { document.title = title ? `${title} · MCLR Analyse` : 'MCLR Analyse — Analyses de peptides et certificats vérifiables'; }, [title]);
 }
