@@ -42,12 +42,6 @@ export type CertificatePdfInput = {
   sampleImage?: Uint8Array | null;   // photo du flacon (vignette)
 };
 
-export const DISCLAIMER =
-  "Les résultats présentés dans ce document sont issus du rapport d'analyse fourni par le laboratoire indiqué dans le dossier associé. " +
-  "Ce document est une reproduction / synthèse de vérification et ne constitue pas un rapport émis par le laboratoire.";
-const DISCLAIMER_EN =
-  'Results reproduced unaltered from the independent laboratory test report. This verification certificate is not a report issued by the laboratory. For research use only.';
-
 // Identité visuelle (propre à la marque — aucun élément repris d'un laboratoire)
 const NAVY = rgb(0.09, 0.275, 0.416);       // #17466A (bleu du logo MCLR)
 const NAVY_SOFT = rgb(0.925, 0.945, 0.965); // fond des valeurs
@@ -314,10 +308,7 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
       if (qrModel.modules.get(r, c)) pg.drawRectangle({ x: x0 + (c + 1) * cell, y: y0 + size - (r + 2) * cell, width: cell + 0.05, height: cell + 0.05, color: NAVY });
     }
   };
-  const discFr = wrap(DISCLAIMER, fReg, 7.5, CW - 24);
-  const discEn = wrap(DISCLAIMER_EN, fReg, 7, CW - 24);
-  const blockH = 104 + (discFr.length + discEn.length) * 9.5 + 22;
-  ensure(blockH);
+  ensure(110);
 
   const qs = 86;
   page!.drawRectangle({ x: M, y: y - 104, width: CW, height: 104, borderColor: NAVY, borderWidth: 1.2 });
@@ -329,11 +320,6 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
   text(input.verifyUrl, tx, y - 80, 8.5, fMono, NAVY);
   text(`Certificate ID : ${input.publicId}`, tx, y - 93, 8, fBold, INK);
   y -= 116;
-
-  page!.drawRectangle({ x: M, y: y - (discFr.length + discEn.length) * 9.5 - 22, width: CW, height: (discFr.length + discEn.length) * 9.5 + 22, color: rgb(0.975, 0.977, 0.98) });
-  text('MENTION IMPORTANTE / IMPORTANT NOTICE', M + 12, y - 12, 6.8, fBold, GOLD);
-  [...discFr.map((l) => ({ l, s: 7.5, c: INK })), ...discEn.map((l) => ({ l, s: 7, c: MUTED }))]
-    .forEach(({ l, s, c }, i) => text(l, M + 12, y - 24 - i * 9.5, s, fReg, c));
 
   // ---------- Pied de page ----------
   const pages = doc.getPages();
