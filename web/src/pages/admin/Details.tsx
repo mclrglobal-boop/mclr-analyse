@@ -87,7 +87,7 @@ export function OrderDetail() {
 }
 
 // ------------------------------------------------------------------ Produits
-type Product = { id: string; slug: string; name: string; description: string; method: string; price_cents: number; currency: string; turnaround: string; technical_info: string; active: boolean; sort_order: number };
+type Product = { id: string; slug: string; name: string; description: string; method: string; price_cents: number; compare_at_cents: number | null; highlight: string | null; currency: string; turnaround: string; technical_info: string; active: boolean; sort_order: number };
 
 export function Products() {
   const { data } = useAsync(async () => ((await supabase.from('products').select('*').order('sort_order')).data ?? []) as Product[]);
@@ -128,6 +128,8 @@ export function ProductEdit() {
           <Field label="Prix TTC (€)"><input name="price_eur" required inputMode="decimal" defaultValue={v.price_cents != null ? (v.price_cents / 100).toFixed(2) : ''} className="input" /></Field>
           <Field label="Délai indicatif"><input name="turnaround" defaultValue={v.turnaround} className="input" /></Field>
           <Field label="Ordre d'affichage"><input name="sort_order" type="number" min={0} defaultValue={v.sort_order ?? 0} className="input" /></Field>
+          <Field label="Prix barré (€)" hint="Optionnel, ex. prix des analyses séparées"><input name="compare_eur" inputMode="decimal" defaultValue={v.compare_at_cents != null ? (v.compare_at_cents / 100).toFixed(2) : ''} className="input" /></Field>
+          <Field label="Badge" hint="Optionnel, ex. Recommandé"><input name="highlight" maxLength={40} defaultValue={v.highlight ?? ''} className="input" /></Field>
         </div>
         <Field label="Description"><textarea name="description" rows={4} defaultValue={v.description} className="input" /></Field>
         <Field label="Informations techniques"><textarea name="technical_info" rows={3} defaultValue={v.technical_info} className="input" /></Field>

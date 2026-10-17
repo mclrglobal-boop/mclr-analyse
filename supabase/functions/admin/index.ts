@@ -163,10 +163,14 @@ Deno.serve(async (req) => {
         if (name.length < 2 || method.length < 2) throw new Error('Nom et méthode obligatoires');
         if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) throw new Error('Slug : minuscules, chiffres et tirets');
         if (!(price >= 0.5 && price <= 100000)) throw new Error('Prix invalide');
+        const cmpRaw = String(input.compare_eur ?? '').trim().replace(',', '.');
+        const cmp = cmpRaw ? Number(cmpRaw) : null;
+        if (cmp !== null && !(cmp > price && cmp <= 100000)) throw new Error('Prix barré : doit être supérieur au prix');
         const row = {
           name, slug, method, price_cents: Math.round(price * 100), description: txt(input.description, 4000),
+          compare_at_cents: cmp === null ? null : Math.round(cmp * 100), highlight: txt(input.highlight, 40) || null,
           turnaround: txt(input.turnaround, 120), technical_info: txt(input.technical_info, 4000),
-          active: input.active === 'on' || input.active === 'true', sort_order: Number(input.sort_order) || 0,
+          active: input.active === true || input.active === 'on' || input.active === 'true', sort_order: Number(input.sort_order) || 0,
         };
         if (input.id) {
           const { error } = await base.from('products').update(row).eq('id', uuid(input.id));

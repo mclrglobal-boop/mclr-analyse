@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { formatMoney } from '../lib/format';
 import { useAsync, useTitle } from '../lib/useAsync';
 
-export type Product = { id: string; slug: string; name: string; description: string; method: string; price_cents: number; currency: string; turnaround: string; technical_info: string; active: boolean; sort_order: number };
+export type Product = { id: string; slug: string; name: string; description: string; method: string; price_cents: number; compare_at_cents: number | null; highlight: string | null; currency: string; turnaround: string; technical_info: string; active: boolean; sort_order: number };
 
 export async function loadProducts() {
   const { data, error } = await supabase.from('products').select('*').eq('active', true).order('sort_order');
@@ -73,10 +73,11 @@ export default function Home() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {products.slice(0, 4).map((p) => (
-              <Link key={p.id} to={`/analyse/?slug=${p.slug}`} className="card group p-5 transition hover:border-brand">
+              <Link key={p.id} to={`/analyse/?slug=${p.slug}`} className={`card group relative p-5 transition hover:border-brand ${p.highlight ? 'border-leaf ring-1 ring-leaf/40' : ''}`}>
+                {p.highlight && <span className="absolute -top-2.5 right-4 rounded-full bg-leaf px-2.5 py-0.5 text-[11px] font-semibold text-white">{p.highlight}</span>}
                 <div className="font-mono text-xs text-leaf">{p.method}</div>
                 <div className="mt-2 font-semibold group-hover:text-brand">{p.name}</div>
-                <div className="mt-4 text-lg font-bold">{formatMoney(p.price_cents, p.currency)}</div>
+                <div className="mt-4 flex items-baseline gap-2"><span className="text-lg font-bold">{formatMoney(p.price_cents, p.currency)}</span>{p.compare_at_cents && <s className="text-sm text-ink-500">{formatMoney(p.compare_at_cents, p.currency)}</s>}</div>
                 <div className="text-xs text-ink-500">{p.turnaround}</div>
               </Link>
             ))}
