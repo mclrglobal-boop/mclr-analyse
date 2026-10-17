@@ -23,11 +23,14 @@ export function publicFileUrl(action: 'pdf' | 'image', id: string, kind?: string
   return `${FN}/public?${new URLSearchParams({ action, id, ...(kind ? { kind } : {}) })}`;
 }
 
-export async function startCheckout(productId: string): Promise<string> {
+/** Option « Pack Sérénité » (le prix réel est fixé côté serveur). */
+export const SERENITE_PRICE_CENTS = 1500;
+
+export async function startCheckout(productId: string, serenite = false): Promise<string> {
   const res = await fetch(`${FN}/checkout`, {
     method: 'POST',
     headers: { apikey: ANON, Authorization: `Bearer ${ANON}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ product_id: productId }),
+    body: JSON.stringify({ product_id: productId, serenite }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.url) throw new Error(data.error || 'Paiement indisponible');

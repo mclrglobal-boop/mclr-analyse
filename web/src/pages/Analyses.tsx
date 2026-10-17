@@ -1,6 +1,6 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { useState } from 'react';
-import { startCheckout, supabase } from '../lib/supabase';
+import { SERENITE_PRICE_CENTS, startCheckout, supabase } from '../lib/supabase';
 import { formatMoney } from '../lib/format';
 import { useAsync, useTitle } from '../lib/useAsync';
 import { Empty, Loading, Notice } from '../components/ui';
@@ -48,6 +48,7 @@ export function Analyse() {
   }, [slug]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [serenite, setSerenite] = useState(false);
   useTitle(p ? `${p.name} (${p.method})` : 'Analyse');
 
   if (loading) return <Loading />;
@@ -55,7 +56,7 @@ export function Analyse() {
 
   async function order() {
     setBusy(true); setErr('');
-    try { window.location.href = await startCheckout(p!.id); } catch (e) { setErr((e as Error).message); setBusy(false); }
+    try { window.location.href = await startCheckout(p!.id, serenite); } catch (e) { setErr((e as Error).message); setBusy(false); }
   }
 
   return (
@@ -83,7 +84,15 @@ export function Analyse() {
             <div className="flex justify-between"><dt className="text-ink-500">Méthode</dt><dd className="font-medium">{p.method}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-ink-500">Délai</dt><dd className="text-right font-medium">{p.turnaround}</dd></div>
           </dl>
-          <button onClick={order} disabled={busy} className="btn-primary mt-6 w-full py-3 text-base">{busy ? 'Redirection vers le paiement…' : 'Commander cette analyse'}</button>
+          <label className={`mt-5 flex cursor-pointer gap-3 rounded-lg border p-4 transition ${serenite ? 'border-leaf bg-leaf/5' : 'border-line hover:border-brand'}`}>
+            <input type="checkbox" checked={serenite} onChange={(e) => setSerenite(e.target.checked)} className="mt-1 h-4 w-4 accent-[#449476]" />
+            <span className="flex-1">
+              <span className="flex items-center justify-between gap-2"><span className="font-semibold">★ Pack Sérénité</span><span className="font-bold">+{formatMoney(SERENITE_PRICE_CENTS, p.currency)}</span></span>
+              <span className="mt-1 block text-xs leading-relaxed text-ink-700">Photo HD de votre flacon à réception + certification QR code. Traçabilité visuelle immédiate et vérification publique.</span>
+            </span>
+          </label>
+          <div className="mt-4 flex justify-between border-t border-line pt-3 text-sm"><span className="text-ink-500">Total</span><span className="font-bold">{formatMoney(p.price_cents + (serenite ? SERENITE_PRICE_CENTS : 0), p.currency)}</span></div>
+          <button onClick={order} disabled={busy} className="btn-primary mt-4 w-full py-3 text-base">{busy ? 'Redirection vers le paiement…' : 'Commander cette analyse'}</button>
           {err && <div className="mt-3"><Notice tone="error">{err}</Notice></div>}
           <p className="mt-3 text-center text-xs text-ink-500">Paiement sécurisé par Stripe. Instructions d&apos;envoi affichées après paiement.</p>
         </aside>

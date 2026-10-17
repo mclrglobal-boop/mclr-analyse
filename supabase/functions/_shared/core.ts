@@ -55,6 +55,13 @@ export function orderUrl(site: string, o: { reference: string; access_token: str
   return `${site}/commande/?ref=${encodeURIComponent(o.reference)}&t=${o.access_token}`;
 }
 
+/** Option « Pack Sérénité » proposée à la commande. */
+export const SERENITE = {
+  price_cents: 1500,
+  name: 'Pack Sérénité',
+  description: 'Photo HD de votre flacon à réception + certification QR code vérifiable en ligne',
+};
+
 export const PUBLIC_ID_RE = /^COA-[0-9A-HJKMNP-TV-Z]{8}$/;
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

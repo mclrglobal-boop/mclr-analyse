@@ -62,10 +62,10 @@ type OrderLike = { reference: string; customer_email: string; product_name: stri
 export function emails(site: string, s: Settings) {
   const L = (title: string, body: string, cta?: { label: string; href: string }) => layout(site, s, title, body, cta);
   return {
-    orderConfirmed(o: OrderLike & { amount: string }) {
+    orderConfirmed(o: OrderLike & { amount: string; serenite?: boolean }) {
       return send(o.customer_email, `Commande confirmée — ${o.reference}`, L('Commande confirmée',
         p('Merci pour votre commande. Votre paiement a bien été reçu.') +
-        p(`<b>Référence :</b> <span style="font-family:monospace">${esc(o.reference)}</span><br><b>Analyse :</b> ${esc(o.product_name)}<br><b>Montant :</b> ${esc(o.amount)}`) +
+        p(`<b>Référence :</b> <span style="font-family:monospace">${esc(o.reference)}</span><br><b>Analyse :</b> ${esc(o.product_name)}${o.serenite ? '<br><b>Option :</b> Pack Sérénité (photo HD du flacon à réception)' : ''}<br><b>Montant :</b> ${esc(o.amount)}`) +
         p("Les instructions d'envoi de votre échantillon vous sont transmises dans un email séparé et restent consultables sur votre page de commande."),
         { label: 'Voir ma commande', href: orderUrl(site, o) }));
     },
@@ -108,7 +108,7 @@ export function emails(site: string, s: Settings) {
     },
 
     /** Bon de commande au laboratoire (anglais, aucune donnée client). */
-    labOrder(o: { orderReference: string; sampleReference: string; analysis: string; method: string; sampleName: string | null; batchNumber: string | null }) {
+    labOrder(o: { orderReference: string; sampleReference: string; analysis: string; method: string; sampleName: string | null; batchNumber: string | null; photo?: boolean }) {
       const row = (k: string, v: string | null) =>
         `<tr><td style="padding:6px 10px;border:1px solid #E2E6EA;background:#F4F6F8;font-weight:bold;width:42%">${esc(k)}</td><td style="padding:6px 10px;border:1px solid #E2E6EA">${esc(v || '—')}</td></tr>`;
       const body =
@@ -117,7 +117,8 @@ export function emails(site: string, s: Settings) {
         `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px;margin:0 0 14px">` +
         row('Client / Test for', s.company_name) + row('Our order reference', o.orderReference) +
         row('Sample reference (on vial & parcel)', o.sampleReference) + row('Requested analysis', `${o.analysis} — ${o.method}`) +
-        row('Sample name', o.sampleName) + row('Lot / batch number', o.batchNumber) + `</table>` +
+        row('Sample name', o.sampleName) + row('Lot / batch number', o.batchNumber) +
+        (o.photo ? row('Additional service', 'HD photo of the vial on reception — please send it with the test report') : '') + `</table>` +
         (s.lab_order_notes ? p(esc(s.lab_order_notes).replace(/\n/g, '<br>')) : '') +
         p(`Please issue the test report in the name of <b>${esc(s.company_name)}</b>, quote the sample reference <b>${esc(o.sampleReference)}</b>, and send it to ${esc(s.company_email || 'this address')}. Payment as per our usual terms.`) +
         p(`Thank you,<br>${esc(s.company_name)}`);
@@ -142,7 +143,7 @@ export async function setOrderStatus(site: string, s: Settings, orderId: string,
 /** Bon de commande automatique au labo (idempotent sauf renvoi forcé). */
 export async function sendLabOrder(site: string, s: Settings, orderId: string, force = false) {
   if (!s.lab_email) return { sent: false, reason: 'Email du laboratoire non configuré' };
-  const { data: o } = await db().from('orders').select('id, reference, product_name, status, lab_notified_at, products(method)').eq('id', orderId).single();
+  const { data: o } = await db().from('orders').select('id, reference, product_name, status, lab_notified_at, serenite, products(method)').eq('id', orderId).single();
   if (!o) return { sent: false, reason: 'Commande introuvable' };
   if (!force && (!s.lab_auto_order || o.lab_notified_at)) return { sent: false, reason: 'déjà transmis ou désactivé' };
   if (['pending', 'payment_failed', 'refunded', 'cancelled'].includes(o.status)) return { sent: false, reason: 'commande non payée' };
@@ -150,7 +151,7 @@ export async function sendLabOrder(site: string, s: Settings, orderId: string, f
   const r = await emails(site, s).labOrder({
     orderReference: o.reference, sampleReference: smp?.reference ?? '', analysis: o.product_name,
     method: (o.products as unknown as { method: string } | null)?.method ?? '',
-    sampleName: smp?.product_name ?? null, batchNumber: smp?.batch_number ?? null,
+    sampleName: smp?.product_name ?? null, batchNumber: smp?.batch_number ?? null, photo: !!o.serenite,
   });
   if (!r.ok) return { sent: false, reason: "Échec d'envoi (SMTP non configuré ?)" };
   await db().from('orders').update({ lab_notified_at: new Date().toISOString() }).eq('id', o.id);

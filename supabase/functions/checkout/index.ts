@@ -1,12 +1,13 @@
-// POST { product_id } → URL Stripe Checkout (le prix est lu en base, jamais fourni par le client)
-import { corsHeaders, db, fail, getSettings, json, siteUrl, UUID_RE } from '../_shared/core.ts';
+// POST { product_id, serenite? } → URL Stripe Checkout (les prix sont fixés côté serveur, jamais fournis par le client)
+import { corsHeaders, db, fail, getSettings, json, SERENITE, siteUrl, UUID_RE } from '../_shared/core.ts';
 import { stripe } from '../_shared/stripe.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return fail('Méthode non autorisée', 405);
   try {
-    const { product_id } = await req.json().catch(() => ({}));
+    const { product_id, serenite } = await req.json().catch(() => ({}));
+    const withSerenite = serenite === true;
     if (!UUID_RE.test(String(product_id ?? ''))) return fail('Produit invalide');
     const { data: p } = await db().from('products')
       .select('id, slug, name, method, price_cents, currency, active').eq('id', product_id).maybeSingle();
@@ -27,9 +28,16 @@ Deno.serve(async (req) => {
             metadata: { product_id: p.id },
           },
         },
-      }],
-      metadata: { product_id: p.id },
-      payment_intent_data: { metadata: { product_id: p.id } },
+      }, ...(withSerenite ? [{
+        quantity: 1,
+        price_data: {
+          currency: p.currency,
+          unit_amount: SERENITE.price_cents,
+          product_data: { name: SERENITE.name, description: SERENITE.description },
+        },
+      }] : [])],
+      metadata: { product_id: p.id, serenite: withSerenite ? '1' : '0' },
+      payment_intent_data: { metadata: { product_id: p.id, serenite: withSerenite ? '1' : '0' } },
       custom_fields: [
         { key: 'sample_name', type: 'text', label: { type: 'custom', custom: 'Nom du produit à analyser' }, text: { maximum_length: 120 } },
         { key: 'batch_number', type: 'text', optional: true, label: { type: 'custom', custom: 'Numéro de lot (facultatif)' }, text: { maximum_length: 60 } },

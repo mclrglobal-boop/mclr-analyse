@@ -36,6 +36,7 @@ export function OrderDetail() {
           <dl className="grid grid-cols-[130px_1fr] gap-y-2 text-sm">
             <dt className="text-ink-500">Client</dt><dd>{o.customer_name || '—'}<br /><span className="text-ink-500">{o.customer_email}</span></dd>
             <dt className="text-ink-500">Analyse</dt><dd>{o.product_name}</dd>
+            <dt className="text-ink-500">Option</dt><dd>{o.serenite ? <Badge tone="green">★ Pack Sérénité — photo HD du flacon</Badge> : '—'}</dd>
             <dt className="text-ink-500">Montant</dt><dd>{formatMoney(o.amount_cents, o.currency)}</dd>
             <dt className="text-ink-500">Date</dt><dd>{formatDateTime(o.created_at)}</dd>
             <dt className="text-ink-500">Laboratoire</dt>

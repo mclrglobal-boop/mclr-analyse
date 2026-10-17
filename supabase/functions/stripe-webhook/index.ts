@@ -9,8 +9,8 @@ type Session = {
   customer_email?: string | null; customer_details?: { email?: string | null; name?: string | null } | null;
   custom_fields?: { key: string; text?: { value?: string | null } }[];
 };
-type OrderRow = { id: string; reference: string; customer_email: string; product_name: string; access_token: string; amount_cents: number; currency: string };
-const ORDER_COLS = 'id, reference, customer_email, product_name, access_token, amount_cents, currency';
+type OrderRow = { id: string; reference: string; customer_email: string; product_name: string; access_token: string; amount_cents: number; currency: string; serenite: boolean };
+const ORDER_COLS = 'id, reference, customer_email, product_name, access_token, amount_cents, currency, serenite';
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
@@ -76,6 +76,7 @@ async function onCompleted(session: Session, site: string, s: Settings) {
     amount_cents: session.amount_total ?? 0,
     currency: session.currency ?? 'eur',
     status: paid ? 'payment_received' : 'pending',
+    serenite: session.metadata?.serenite === '1',
   }, { onConflict: 'stripe_session_id', ignoreDuplicates: true }).select(ORDER_COLS);
   if (error) throw new Error(error.message);
   const order = data?.[0] as OrderRow | undefined;
