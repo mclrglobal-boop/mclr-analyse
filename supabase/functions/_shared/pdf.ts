@@ -39,6 +39,7 @@ export type CertificatePdfInput = {
   hplcPeaks?: { rt: string; type: string; width: string; area: string; height: string; areaPct: string }[] | null; // texte exact du rapport
   hplcCaption?: string | null;
   msCaption?: string | null;
+  sampleImage?: Uint8Array | null;   // photo du flacon (vignette)
 };
 
 export const DISCLAIMER =
@@ -116,8 +117,9 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
   const fBold = await doc.embedFont(bold, { subset: true });
   const fMono = await doc.embedFont(mono, { subset: true });
   const fSerif = await doc.embedFont(serif, { subset: true });
-  const [logo, hplc, ms] = await Promise.all([
+  const [logo, hplc, ms, photo] = await Promise.all([
     embedImage(doc, input.logo).catch(() => null), embedImage(doc, input.hplcImage), embedImage(doc, input.msImage),
+    embedImage(doc, input.sampleImage).catch(() => null),
   ]);
 
   doc.setTitle(`Certificate of Analysis Verification ${input.publicId}`);
@@ -205,19 +207,29 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
     ['Received / Réception', fmtDate(input.receivedDate)],
     ['Analysis / Analyse', fmtDate(input.analysisDate)],
   ];
-  const colW = (CW - 10) / 2, labW = 104, rowH = 22;
+  const PW = photo ? 78 : 0;                 // largeur réservée à la vignette du flacon
+  const GW = photo ? CW - PW - 10 : CW;
+  const colW = (GW - 10) / 2, labW = photo ? 92 : 104, rowH = 22;
   pairs.forEach(([k, v], i) => {
     const x = M + (i % 2) * (colW + 10);
     const yy = y - Math.floor(i / 2) * (rowH + 4);
     page!.drawRectangle({ x, y: yy - rowH, width: labW, height: rowH, color: NAVY });
     page!.drawRectangle({ x: x + labW, y: yy - rowH, width: colW - labW, height: rowH, color: NAVY_SOFT });
-    text(k, x + 7, yy - 14.5, 7.5, fBold, WHITE);
+    text(k, x + 7, yy - 14.5, fitSize(k, fBold, 7.5, labW - 11, 6), fBold, WHITE);
     const maxW = colW - labW - 12;
     const size = fitSize(v, fBold, 9.5, maxW, 7.5);
     const lines = wrap(v, fBold, size, maxW);
     if (lines.length === 1) text(v, x + labW + 8, yy - 15, size, fBold, INK);
     else lines.slice(0, 2).forEach((l, j) => text(l, x + labW + 8, yy - 9.5 - j * 9, Math.min(size, 7.5), fBold, INK));
   });
+  const gridH = Math.ceil(pairs.length / 2) * (rowH + 4) - 4;
+  if (photo) {
+    const bx = M + GW + 10, bh = gridH;
+    page!.drawRectangle({ x: bx, y: y - bh, width: PW, height: bh, color: NAVY_SOFT });
+    const sc = Math.min((PW - 6) / photo.width, (bh - 6) / photo.height);
+    const w = photo.width * sc, h = photo.height * sc;
+    page!.drawImage(photo, { x: bx + (PW - w) / 2, y: y - bh + (bh - h) / 2, width: w, height: h });
+  }
   y -= Math.ceil(pairs.length / 2) * (rowH + 4);
   // Source
   const src = 'Tested by an independent third-party laboratory  ·  Analysé par un laboratoire tiers indépendant';

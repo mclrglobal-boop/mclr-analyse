@@ -10,7 +10,7 @@ type Verification =
   | {
       result: 'valid' | 'revoked';
       certificate: { public_id: string; status: string; version: number; created_at: string; updated_at: string; revoked_at: string | null; revocation_reason: string | null; scan_count: number };
-      data: { product_name: string; sample_reference: string; batch_number: string | null; analysis_date: string; method: string; main_result: string | null; issued_at: string; appearance: string | null; cas_number: string | null; received_date: string | null; client_name?: string | null; hplc_peaks?: { rt: string; type: string; width: string; area: string; height: string; areaPct: string }[] | null; has_hplc: boolean; has_ms: boolean; has_pdf: boolean };
+      data: { product_name: string; sample_reference: string; batch_number: string | null; analysis_date: string; method: string; main_result: string | null; issued_at: string; appearance: string | null; cas_number: string | null; received_date: string | null; client_name?: string | null; hplc_peaks?: { rt: string; type: string; width: string; area: string; height: string; areaPct: string }[] | null; hplc_caption?: string | null; ms_caption?: string | null; has_photo?: boolean; has_hplc: boolean; has_ms: boolean; has_pdf: boolean };
       results: { analyte: string; value: string; unit: string | null; specification: string | null }[];
       versions: { version: number; issued_at: string; reason: string | null }[];
     };
@@ -68,8 +68,11 @@ function Result({ id }: { id: string }) {
         : <State tone="red" icon="!" title="CERTIFICATE REVOKED" text="Ce certificat a été révoqué : il n'est plus considéré comme valide et ne doit plus être utilisé comme preuve des résultats indiqués." />}
       <div className="card mt-5 overflow-hidden">
         <div className="border-b border-line bg-paper px-5 py-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">Certificate ID</div>
-          <div className="mt-1 font-mono text-2xl font-bold tracking-wider">{c.public_id}</div>
+          <div className="flex items-center justify-between gap-4">
+            <div><div className="text-xs font-semibold uppercase tracking-wide text-ink-500">Certificate ID</div>
+            <div className="mt-1 font-mono text-2xl font-bold tracking-wider">{c.public_id}</div></div>
+            {d.has_photo && <a href={publicFileUrl('image', c.public_id, 'photo')} target="_blank" rel="noopener"><img src={publicFileUrl('image', c.public_id, 'photo')} alt="Photo du flacon" className="h-20 w-auto rounded border border-line object-cover" /></a>}
+          </div>
         </div>
         <dl className="divide-y divide-line">
           {d.client_name && <Row k="Client" en="Test for" v={d.client_name} strong />}
@@ -119,7 +122,7 @@ function Result({ id }: { id: string }) {
         <div className="card mt-5 space-y-4 p-4">
           {d.has_hplc && <figure><figcaption className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">Chromatogramme HPLC</figcaption><img src={publicFileUrl('image', c.public_id, 'hplc')} alt="Chromatogramme HPLC" className="w-full rounded border border-line" loading="lazy" /></figure>}
           {d.has_ms && <figure><figcaption className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">Spectre de masse</figcaption><img src={publicFileUrl('image', c.public_id, 'ms')} alt="Spectre de masse" className="w-full rounded border border-line" loading="lazy" /></figure>}
-          <p className="text-xs text-ink-500">{d.hplc_peaks?.length ? 'Graphiques tracés par MCLR à partir des données du rapport du laboratoire indépendant (valeurs exactes dans les tableaux ci-dessus).' : 'Extraits du rapport du laboratoire, reproduits sans modification.'}</p>
+          <p className="text-xs text-ink-500">{[d.hplc_caption, d.ms_caption].filter(Boolean).join(' ') || 'Extraits du rapport du laboratoire, reproduits sans modification.'}</p>
         </div>
       )}
       {d.has_pdf && <a href={publicFileUrl('pdf', c.public_id)} target="_blank" rel="noopener" className="btn-dark mt-5 w-full py-3">Voir le document</a>}

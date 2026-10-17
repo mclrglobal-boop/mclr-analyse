@@ -14,7 +14,7 @@ function safeEq(a: string, b: string) {
 async function currentVersion(publicId: string) {
   const { data: cert } = await db().from('certificates').select('id, current_version').eq('public_id', publicId).maybeSingle();
   if (!cert || cert.current_version < 1) return null;
-  const { data: v } = await db().from('certificate_versions').select('pdf_path, hplc_image_path, ms_image_path')
+  const { data: v } = await db().from('certificate_versions').select('pdf_path, hplc_image_path, ms_image_path, sample_photo_path')
     .eq('certificate_id', cert.id).eq('version', cert.current_version).maybeSingle();
   return v;
 }
@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
       if (!PUBLIC_ID_RE.test(id)) return fail('Introuvable', 404);
       const v = await currentVersion(id);
       const kind = url.searchParams.get('kind');
-      const path = action === 'pdf' ? v?.pdf_path : kind === 'hplc' ? v?.hplc_image_path : kind === 'ms' ? v?.ms_image_path : null;
+      const path = action === 'pdf' ? v?.pdf_path : kind === 'hplc' ? v?.hplc_image_path : kind === 'ms' ? v?.ms_image_path : kind === 'photo' ? v?.sample_photo_path : null;
       if (!path) return fail('Introuvable', 404);
       return new Response(null, { status: 302, headers: { ...corsHeaders, Location: await signed(path), 'Cache-Control': 'no-store' } });
     }
