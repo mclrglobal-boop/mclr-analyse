@@ -18,6 +18,11 @@ function NotFound() {
   return <div className="container-x py-16"><Empty>Page introuvable. <Link to="/" className="text-brand underline">Retour à l&apos;accueil</Link></Empty></div>;
 }
 
+// Lien de réinitialisation du mot de passe arrivé sur une autre page : renvoi vers la connexion admin
+if (/type=recovery|error_code=/.test(window.location.hash) && !window.location.pathname.startsWith('/admin/login')) {
+  window.location.replace('/admin/login/' + window.location.hash);
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>

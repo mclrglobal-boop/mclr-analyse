@@ -42,11 +42,20 @@ export default function AdminLayout() {
 
 export function AdminLogin() {
   const nav = useNavigate();
+  const recoveryInUrl = /type=recovery/.test(window.location.hash + window.location.search);
+  const urlError = new URLSearchParams(window.location.hash.slice(1)).get('error_description');
+  const [mode, setMode] = useState<'login' | 'forgot' | 'reset'>(recoveryInUrl ? 'reset' : 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [password2, setPassword2] = useState('');
+  const [error, setError] = useState(urlError ? 'Lien expiré ou invalide : redemandez un lien de réinitialisation.' : '');
+  const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
-  async function submit(e: React.FormEvent) {
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event) => { if (event === 'PASSWORD_RECOVERY') setMode('reset'); });
+    return () => data.subscription.unsubscribe();
+  }, []);
+  async function login(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setError('');
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -54,16 +63,52 @@ export function AdminLogin() {
     try { await adminApi('me'); nav('/admin/', { replace: true }); }
     catch { await supabase.auth.signOut(); setBusy(false); setError('Ce compte n’a pas les droits administrateur'); }
   }
-  return (
+  async function forgot(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setError(''); setInfo('');
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/admin/login/` });
+    setBusy(false);
+    if (error) return setError(error.message);
+    setInfo('Email envoyé. Ouvrez le lien reçu sur cet appareil pour choisir votre mot de passe.');
+  }
+  async function reset(e: React.FormEvent) {
+    e.preventDefault();
+    if (password.length < 8) return setError('8 caractères minimum');
+    if (password !== password2) return setError('Les deux mots de passe ne correspondent pas');
+    setBusy(true); setError('');
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) { setBusy(false); return setError(error.message.includes('session') ? 'Lien expiré : redemandez un lien de réinitialisation.' : error.message); }
+    window.history.replaceState(null, '', '/admin/login/');
+    try { await adminApi('me'); nav('/admin/', { replace: true }); }
+    catch { setBusy(false); setMode('login'); setInfo('Mot de passe enregistré. Connectez-vous.'); }
+  }
+  const box = (children: React.ReactNode, onSubmit: (e: React.FormEvent) => void) => (
     <div className="flex min-h-screen items-center justify-center bg-ink px-4">
-      <form onSubmit={submit} className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-7 shadow-card">
+      <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-7 shadow-card">
         <img src="/brand/mclr-logo.png" alt="MCLR" className="h-9 w-auto" />
-        <div className="font-semibold">Administration</div>
-        <input className="input" type="email" autoComplete="username" placeholder="Email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input className="input" type="password" autoComplete="current-password" placeholder="Mot de passe" required value={password} onChange={(e) => setPassword(e.target.value)} />
+        {children}
         {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">{error}</div>}
-        <button disabled={busy} className="btn-primary w-full">{busy ? 'Connexion…' : 'Se connecter'}</button>
+        {info && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">{info}</div>}
       </form>
     </div>
   );
+  if (mode === 'reset') return box(<>
+    <div className="font-semibold">Choisir un nouveau mot de passe</div>
+    <input className="input" type="password" autoComplete="new-password" placeholder="Nouveau mot de passe (8 caractères min.)" required value={password} onChange={(e) => setPassword(e.target.value)} />
+    <input className="input" type="password" autoComplete="new-password" placeholder="Confirmer le mot de passe" required value={password2} onChange={(e) => setPassword2(e.target.value)} />
+    <button disabled={busy} className="btn-primary w-full">{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
+  </>, reset);
+  if (mode === 'forgot') return box(<>
+    <div className="font-semibold">Mot de passe oublié</div>
+    <input className="input" type="email" autoComplete="username" placeholder="Email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+    <button disabled={busy} className="btn-primary w-full">{busy ? 'Envoi…' : 'Recevoir le lien'}</button>
+    <button type="button" onClick={() => { setMode('login'); setError(''); setInfo(''); }} className="w-full text-sm text-ink-500 hover:text-brand">← Retour à la connexion</button>
+  </>, forgot);
+  return box(<>
+    <div className="font-semibold">Administration</div>
+    <input className="input" type="email" autoComplete="username" placeholder="Email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+    <input className="input" type="password" autoComplete="current-password" placeholder="Mot de passe" required value={password} onChange={(e) => setPassword(e.target.value)} />
+    <button disabled={busy} className="btn-primary w-full">{busy ? 'Connexion…' : 'Se connecter'}</button>
+    <button type="button" onClick={() => { setMode('forgot'); setError(''); setInfo(''); }} className="w-full text-sm text-ink-500 hover:text-brand">Mot de passe oublié ?</button>
+  </>, login);
 }
