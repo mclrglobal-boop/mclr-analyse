@@ -130,17 +130,10 @@ function Result({ id }: { id: string }) {
         <p className="font-medium text-ink">Ce certificat permet de vérifier les informations enregistrées dans notre base de données.</p>
         <p className="mt-2">Les résultats proviennent du rapport d&apos;analyse d&apos;un laboratoire tiers indépendant. Le certificat de vérification est émis par MCLR et ne constitue pas un rapport émis par le laboratoire.</p>
         <dl className="mt-4 grid grid-cols-2 gap-3 text-xs text-ink-500">
-          <div><dt>Version en vigueur</dt><dd className="font-semibold text-ink">v{c.version}</dd></div>
           <div><dt>Vérifications</dt><dd className="font-semibold text-ink">{c.scan_count}</dd></div>
           <div><dt>Créé le</dt><dd className="font-semibold text-ink">{formatDateTime(c.created_at)}</dd></div>
           <div><dt>Dernière modification</dt><dd className="font-semibold text-ink">{formatDateTime(c.updated_at)}</dd></div>
         </dl>
-        {v.versions.length > 1 && (
-          <details className="mt-4 text-xs">
-            <summary className="cursor-pointer font-semibold text-ink">Historique des versions ({v.versions.length})</summary>
-            <ul className="mt-2 space-y-1">{v.versions.map((h) => <li key={h.version}>v{h.version} — {formatDate(h.issued_at)}{h.reason ? ` — ${h.reason}` : ''}</li>)}</ul>
-          </details>
-        )}
       </div>
     </Shell>
   );

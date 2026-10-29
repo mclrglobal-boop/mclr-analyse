@@ -176,11 +176,10 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
   page!.drawRectangle({ x: M, y: y - 40, width: CW, height: 40, color: NAVY });
   text('CERTIFICATE ID', M + 14, y - 15, 7, fBold, GOLD);
   text(input.publicId, M + 14, y - 32, 15, fMono, WHITE);
-  // colonnes : ID (37 %) | version (11 %) | émission (22 %) | réf. échantillon (30 %)
+  // colonnes : ID | émission | réf. échantillon (numéro de version non affiché)
   const colsBand: [string, string, number, number][] = [
-    ['VERSION', `v${input.version}`, 0.37, 0.11],
-    ['ISSUE DATE / ÉMISSION', fmtDate(input.issuedAt), 0.48, 0.22],
-    ['SAMPLE REF. / ÉCHANTILLON', input.sampleReference, 0.70, 0.30],
+    ['ISSUE DATE / ÉMISSION', fmtDate(input.issuedAt), 0.42, 0.24],
+    ['SAMPLE REF. / ÉCHANTILLON', input.sampleReference, 0.68, 0.32],
   ];
   colsBand.forEach(([k, v, start, width]) => {
     const x = M + CW * start;
@@ -230,7 +229,8 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
   page!.drawRectangle({ x: M, y: y - rowH, width: labW, height: rowH, color: NAVY });
   page!.drawRectangle({ x: M + labW, y: y - rowH, width: CW - labW, height: rowH, color: NAVY_SOFT });
   text('Source', M + 7, y - 14.5, 7.5, fBold, WHITE);
-  text(wrap(src, fReg, 8.5, CW - labW - 12)[0], M + labW + 8, y - 14.5, 8.5, fReg, INK);
+  const srcSize = fitSize(src, fReg, 8.5, CW - labW - 14, 6.5);
+  text(src, M + labW + 8, y - 14.5, srcSize, fReg, INK);
   y -= rowH + 18;
 
   // ---------- Résultats ----------
@@ -327,7 +327,7 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
     const legal = [input.company.name, input.company.legalDetails, input.company.email].filter(Boolean).join(' · ');
     pg.drawLine({ start: { x: M, y: 34 }, end: { x: W - M, y: 34 }, thickness: 0.6, color: GOLD });
     pg.drawText(legal.slice(0, 130), { x: M, y: 22, size: 7, font: fReg, color: MUTED });
-    const right = `${input.publicId} · v${input.version} · ${i + 1}/${pages.length}`;
+    const right = `${input.publicId} · ${i + 1}/${pages.length}`;
     pg.drawText(right, { x: W - M - fMono.widthOfTextAtSize(right, 7), y: 22, size: 7, font: fMono, color: MUTED });
   });
 
