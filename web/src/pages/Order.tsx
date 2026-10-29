@@ -9,6 +9,7 @@ type OrderView = {
   order: { reference: string; product_name: string; amount_cents: number; currency: string; status: string; created_at: string; customer_email: string };
   sample: { reference: string; product_name: string | null; batch_number: string | null } | null;
   certificate: { public_id: string; status: string } | null;
+  siblings?: { reference: string; t: string; sample_reference: string | null; sample_name: string | null; status: string; certificate: string | null }[];
   shipping: { recipient: string | null; address: string | null; postal_code: string | null; city: string | null; country: string | null; phone: string | null; instructions: string | null } | null;
 };
 const STEPS = ['payment_received', 'sample_received', 'analysis_in_progress', 'results_available', 'certificate_available'];
@@ -20,7 +21,7 @@ export function Order() {
   const { data, loading, error } = useAsync(() => publicApi<OrderView>({ action: 'order', ref, t }), [ref, t]);
   if (loading) return <Loading />;
   if (error || !data) return <div className="container-x py-16"><Empty>Commande introuvable. Utilisez le lien reçu par email.</Empty></div>;
-  const { order: o, sample, certificate: cert, shipping: s } = data;
+  const { order: o, sample, certificate: cert, shipping: s, siblings = [] } = data;
   const st = ORDER_STATUS[o.status];
   const idx = STEPS.indexOf(o.status);
   return (
@@ -48,6 +49,24 @@ export function Order() {
             <Link className="btn-primary" to={`/verify/?id=${cert.public_id}`}>Vérifier mon certificat</Link>
           </div>
         )}
+        {siblings.length > 1 && (
+          <section className="card overflow-hidden">
+            <div className="px-5 pt-4 text-sm font-semibold">Échantillons de cette commande ({siblings.length})</div>
+            <ul className="mt-2 divide-y divide-line text-sm">
+              {siblings.map((x) => (
+                <li key={x.reference} className={`flex flex-wrap items-center justify-between gap-2 px-5 py-3 ${x.reference === o.reference ? 'bg-paper' : ''}`}>
+                  <div><div className="font-medium">{x.sample_name || '—'}</div><div className="font-mono text-xs text-ink-500">{x.reference} · {x.sample_reference}</div></div>
+                  <div className="flex items-center gap-3">
+                    <Badge tone={ORDER_STATUS[x.status]?.tone}>{ORDER_STATUS[x.status]?.label ?? x.status}</Badge>
+                    {x.certificate
+                      ? <Link className="font-semibold text-brand" to={`/verify/?id=${x.certificate}`}>{x.certificate}</Link>
+                      : x.reference !== o.reference && <Link className="font-semibold text-brand" to={`/commande/?ref=${x.reference}&t=${x.t}`}>Voir</Link>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {s && (
           <section className="card p-6">
             <h2 className="text-lg font-semibold">Instructions d&apos;expédition de l&apos;échantillon</h2>
@@ -59,7 +78,9 @@ export function Order() {
               <div className="text-sm leading-relaxed">
                 <p className="font-semibold">Envoyez l&apos;échantillon directement au laboratoire partenaire.</p>
                 <p className="mt-2">Inscrivez sur le colis <b>et</b> sur le flacon :</p>
-                <ul className="mt-1 space-y-0.5 font-mono"><li>{o.reference}</li>{sample && <li>{sample.reference}</li>}</ul>
+                {siblings.length > 1
+                  ? <ul className="mt-1 space-y-0.5 font-mono">{siblings.map((x) => <li key={x.reference}>{x.sample_reference} <span className="font-sans text-ink-500">({x.sample_name || x.reference})</span></li>)}</ul>
+                  : <ul className="mt-1 space-y-0.5 font-mono"><li>{o.reference}</li>{sample && <li>{sample.reference}</li>}</ul>}
                 {sample?.product_name && <p className="mt-2 text-ink-500">Produit déclaré : {sample.product_name}{sample.batch_number ? ` — lot ${sample.batch_number}` : ''}</p>}
                 {s.instructions && <p className="mt-2 whitespace-pre-line text-ink-700">{s.instructions}</p>}
               </div>

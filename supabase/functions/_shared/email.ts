@@ -57,26 +57,39 @@ export async function send(to: string, subject: string, html: string, opts: { re
   }
 }
 
+type Item = { reference: string; sample_reference: string; sample_name: string | null; batch?: string | null };
+const itemsTable = (items: Item[]) =>
+  `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px;margin:0 0 14px">` +
+  `<tr><th style="text-align:left;padding:6px 8px;border:1px solid #E2E6EA;background:#F4F6F8">Produit</th><th style="text-align:left;padding:6px 8px;border:1px solid #E2E6EA;background:#F4F6F8">Commande</th><th style="text-align:left;padding:6px 8px;border:1px solid #E2E6EA;background:#F4F6F8">Échantillon</th></tr>` +
+  items.map((i) => `<tr><td style="padding:6px 8px;border:1px solid #E2E6EA">${esc(i.sample_name || '—')}${i.batch ? `<br><span style="color:#4F6780">lot ${esc(i.batch)}</span>` : ''}</td><td style="padding:6px 8px;border:1px solid #E2E6EA;font-family:monospace">${esc(i.reference)}</td><td style="padding:6px 8px;border:1px solid #E2E6EA;font-family:monospace;font-weight:bold">${esc(i.sample_reference)}</td></tr>`).join('') +
+  `</table>`;
+
 type OrderLike = { reference: string; customer_email: string; product_name: string; access_token: string };
 
 export function emails(site: string, s: Settings) {
   const L = (title: string, body: string, cta?: { label: string; href: string }) => layout(site, s, title, body, cta);
   return {
-    orderConfirmed(o: OrderLike & { amount: string; serenite?: boolean }) {
-      return send(o.customer_email, `Commande confirmée — ${o.reference}`, L('Commande confirmée',
+    orderConfirmed(o: OrderLike & { amount: string; serenite?: boolean }, items: Item[] = []) {
+      const multi = items.length > 1;
+      return send(o.customer_email, `Commande confirmée — ${o.reference}${multi ? ` (+${items.length - 1})` : ''}`, L('Commande confirmée',
         p('Merci pour votre commande. Votre paiement a bien été reçu.') +
-        p(`<b>Référence :</b> <span style="font-family:monospace">${esc(o.reference)}</span><br><b>Analyse :</b> ${esc(o.product_name)}${o.serenite ? '<br><b>Option :</b> Pack Sérénité (photo HD du flacon à réception)' : ''}<br><b>Montant :</b> ${esc(o.amount)}`) +
+        (multi
+          ? p(`<b>Analyse :</b> ${esc(o.product_name)} — ${items.length} échantillons${o.serenite ? '<br><b>Option :</b> Pack Sérénité (photo HD de chaque flacon à réception)' : ''}<br><b>Montant total :</b> ${esc(o.amount)}`) + itemsTable(items)
+          : p(`<b>Référence :</b> <span style="font-family:monospace">${esc(o.reference)}</span><br><b>Analyse :</b> ${esc(o.product_name)}${o.serenite ? '<br><b>Option :</b> Pack Sérénité (photo HD du flacon à réception)' : ''}<br><b>Montant :</b> ${esc(o.amount)}`)) +
         p("Les instructions d'envoi de votre échantillon vous sont transmises dans un email séparé et restent consultables sur votre page de commande."),
         { label: 'Voir ma commande', href: orderUrl(site, o) }));
     },
 
-    shippingInstructions(o: OrderLike & { sample_reference?: string }) {
+    shippingInstructions(o: OrderLike & { sample_reference?: string }, items: Item[] = []) {
+      const multi = items.length > 1;
       const addr = [s.shipping_recipient, s.shipping_address, `${s.shipping_postal_code ?? ''} ${s.shipping_city ?? ''}`.trim(), s.shipping_country, s.shipping_phone ? `Tél. : ${s.shipping_phone}` : null]
         .filter(Boolean).map(esc).join('<br>');
-      return send(o.customer_email, `Instructions d'expédition — ${o.reference}`, L("Instructions d'expédition de l'échantillon",
-        p("Merci d'envoyer votre échantillon à l'adresse suivante :") +
+      return send(o.customer_email, `Instructions d'expédition — ${o.reference}${multi ? ` (+${items.length - 1})` : ''}`, L(multi ? "Instructions d'expédition des échantillons" : "Instructions d'expédition de l'échantillon",
+        p(multi ? 'Merci d\'envoyer vos échantillons (dans un même colis si vous le souhaitez) à l\'adresse suivante :' : "Merci d'envoyer votre échantillon à l'adresse suivante :") +
         `<div style="background:#EEF4F9;border:1px solid #DCE8F2;border-radius:8px;padding:14px 16px;margin:0 0 14px;line-height:1.6">${addr}</div>` +
-        p(`<b>Indiquez la référence <span style="font-family:monospace">${esc(o.reference)}</span>${o.sample_reference ? ` et la référence échantillon <span style="font-family:monospace">${esc(o.sample_reference)}</span>` : ''} sur le colis et sur le flacon.</b>`) +
+        (multi
+          ? p('<b>Inscrivez sur chaque flacon sa référence échantillon (SMP-…), et la liste des références sur le colis :</b>') + itemsTable(items)
+          : p(`<b>Indiquez la référence <span style="font-family:monospace">${esc(o.reference)}</span>${o.sample_reference ? ` et la référence échantillon <span style="font-family:monospace">${esc(o.sample_reference)}</span>` : ''} sur le colis et sur le flacon.</b>`)) +
         (s.shipping_instructions ? p(esc(s.shipping_instructions).replace(/\n/g, '<br>')) : ''),
         { label: 'Voir ma commande', href: orderUrl(site, o) }));
     },

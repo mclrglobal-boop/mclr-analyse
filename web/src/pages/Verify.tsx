@@ -125,7 +125,7 @@ function Result({ id }: { id: string }) {
           <p className="text-xs text-ink-500">{[d.hplc_caption, d.ms_caption].filter(Boolean).join(' ') || 'Extraits du rapport du laboratoire, reproduits sans modification.'}</p>
         </div>
       )}
-      {d.has_pdf && <a href={publicFileUrl('pdf', c.public_id)} target="_blank" rel="noopener" className="btn-dark mt-5 w-full py-3">Voir le document</a>}
+      {d.has_pdf && <a href={`/pdf/?id=${c.public_id}`} target="_blank" rel="noopener" className="btn-dark mt-5 w-full py-3">Voir le document (PDF)</a>}
       <div className="mt-5 rounded-xl border border-line bg-white p-5 text-sm leading-relaxed text-ink-700">
         <p className="font-medium text-ink">Ce certificat permet de vérifier les informations enregistrées dans notre base de données.</p>
         <p className="mt-2">Les résultats proviennent du rapport d&apos;analyse d&apos;un laboratoire tiers indépendant. Le certificat de vérification est émis par MCLR et ne constitue pas un rapport émis par le laboratoire.</p>

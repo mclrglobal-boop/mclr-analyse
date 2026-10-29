@@ -1,6 +1,6 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { useState } from 'react';
-import { SERENITE_PRICE_CENTS, startCheckout, supabase } from '../lib/supabase';
+import { SERENITE_PRICE_CENTS, startCheckout, supabase, type SampleInput } from '../lib/supabase';
 import { formatMoney } from '../lib/format';
 import { useAsync, useTitle } from '../lib/useAsync';
 import { Empty, Loading, Notice } from '../components/ui';
@@ -49,15 +49,21 @@ export function Analyse() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [serenite, setSerenite] = useState(false);
+  const [samples, setSamples] = useState<SampleInput[]>([{ name: '', batch: '' }]);
+  const setSample = (i: number, k: keyof SampleInput, v: string) => setSamples((l) => l.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
   useTitle(p ? `${p.name} (${p.method})` : 'Analyse');
 
   if (loading) return <Loading />;
   if (!p) return <div className="container-x py-16"><Empty>Analyse introuvable. <Link to="/analyses/" className="text-brand underline">Voir le catalogue</Link></Empty></div>;
 
-  async function order() {
+  async function order(e: React.FormEvent) {
+    e.preventDefault();
+    if (samples.some((s) => s.name.trim().length < 2)) return setErr('Indiquez le nom du produit pour chaque échantillon.');
     setBusy(true); setErr('');
-    try { window.location.href = await startCheckout(p!.id, serenite); } catch (e) { setErr((e as Error).message); setBusy(false); }
+    try { window.location.href = await startCheckout(p!.id, serenite, samples); } catch (e) { setErr((e as Error).message); setBusy(false); }
   }
+  const n = samples.length;
+  const unit = p.price_cents + (serenite ? SERENITE_PRICE_CENTS : 0);
 
   return (
     <div className="container-x py-12">
@@ -84,15 +90,36 @@ export function Analyse() {
             <div className="flex justify-between"><dt className="text-ink-500">Méthode</dt><dd className="font-medium">{p.method}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-ink-500">Délai</dt><dd className="text-right font-medium">{p.turnaround}</dd></div>
           </dl>
-          <label className={`mt-5 flex cursor-pointer gap-3 rounded-lg border p-4 transition ${serenite ? 'border-leaf bg-leaf/5' : 'border-line hover:border-brand'}`}>
-            <input type="checkbox" checked={serenite} onChange={(e) => setSerenite(e.target.checked)} className="mt-1 h-4 w-4 accent-[#449476]" />
-            <span className="flex-1">
-              <span className="flex items-center justify-between gap-2"><span className="font-semibold">★ Pack Sérénité</span><span className="font-bold">+{formatMoney(SERENITE_PRICE_CENTS, p.currency)}</span></span>
-              <span className="mt-1 block text-xs leading-relaxed text-ink-700">Photo HD de votre flacon à réception + certification QR code. Traçabilité visuelle immédiate et vérification publique.</span>
-            </span>
-          </label>
-          <div className="mt-4 flex justify-between border-t border-line pt-3 text-sm"><span className="text-ink-500">Total</span><span className="font-bold">{formatMoney(p.price_cents + (serenite ? SERENITE_PRICE_CENTS : 0), p.currency)}</span></div>
-          <button onClick={order} disabled={busy} className="btn-primary mt-4 w-full py-3 text-base">{busy ? 'Redirection vers le paiement…' : 'Commander cette analyse'}</button>
+          <form onSubmit={order} className="mt-5">
+            <div className="text-sm font-semibold">Échantillons à analyser</div>
+            <div className="mt-2 space-y-3">
+              {samples.map((smp, i) => (
+                <div key={i} className="rounded-lg border border-line p-3">
+                  <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-ink-500">
+                    <span>Échantillon {i + 1}</span>
+                    {n > 1 && <button type="button" onClick={() => setSamples((l) => l.filter((_, j) => j !== i))} className="font-medium normal-case tracking-normal text-danger hover:underline">Retirer</button>}
+                  </div>
+                  <label className="mt-2 block text-xs text-ink-700" htmlFor={`sn${i}`}>Nom du produit</label>
+                  <input id={`sn${i}`} className="input mt-1" required maxLength={120} placeholder="Ex. Tirzepatide 30 mg" value={smp.name} onChange={(e) => setSample(i, 'name', e.target.value)} />
+                  <label className="mt-2 block text-xs text-ink-700" htmlFor={`sb${i}`}>Numéro de lot (facultatif)</label>
+                  <input id={`sb${i}`} className="input mt-1" maxLength={60} placeholder="Ex. TR3020261008" value={smp.batch} onChange={(e) => setSample(i, 'batch', e.target.value)} />
+                </div>
+              ))}
+            </div>
+            {n < 20 && <button type="button" onClick={() => setSamples((l) => [...l, { name: '', batch: '' }])} className="btn-ghost mt-3 w-full border border-dashed border-brand text-brand">+ Ajouter une analyse</button>}
+            <label className={`mt-4 flex cursor-pointer gap-3 rounded-lg border p-4 transition ${serenite ? 'border-leaf bg-leaf/5' : 'border-line hover:border-brand'}`}>
+              <input type="checkbox" checked={serenite} onChange={(e) => setSerenite(e.target.checked)} className="mt-1 h-4 w-4 accent-[#449476]" />
+              <span className="flex-1">
+                <span className="flex items-center justify-between gap-2"><span className="font-semibold">★ Pack Sérénité</span><span className="font-bold">+{formatMoney(SERENITE_PRICE_CENTS, p.currency)}{n > 1 ? ' / éch.' : ''}</span></span>
+                <span className="mt-1 block text-xs leading-relaxed text-ink-700">Photo HD de votre flacon à réception + certification QR code. Traçabilité visuelle immédiate et vérification publique.</span>
+              </span>
+            </label>
+            <div className="mt-4 space-y-1 border-t border-line pt-3 text-sm">
+              {n > 1 && <div className="flex justify-between text-ink-500"><span>{n} × {formatMoney(unit, p.currency)}</span><span>{n} certificats</span></div>}
+              <div className="flex justify-between"><span className="text-ink-500">Total</span><span className="font-bold">{formatMoney(unit * n, p.currency)}</span></div>
+            </div>
+            <button type="submit" disabled={busy} className="btn-primary mt-4 w-full py-3 text-base">{busy ? 'Redirection vers le paiement…' : n > 1 ? `Commander ${n} analyses` : 'Commander cette analyse'}</button>
+          </form>
           {err && <div className="mt-3"><Notice tone="error">{err}</Notice></div>}
           <p className="mt-3 text-center text-xs text-ink-500">Paiement sécurisé par Stripe. Instructions d&apos;envoi affichées après paiement.</p>
         </aside>

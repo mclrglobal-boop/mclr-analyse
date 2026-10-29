@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
       const ref = (url.searchParams.get('ref') ?? '').toUpperCase();
       const t = url.searchParams.get('t') ?? '';
       const { data: o } = await db().from('orders')
-        .select('id, reference, access_token, product_name, amount_cents, currency, status, created_at, customer_email')
+        .select('id, reference, access_token, product_name, amount_cents, currency, status, created_at, customer_email, stripe_session_id, item_count')
         .eq('reference', ref).maybeSingle();
       if (!o || !t || !safeEq(o.access_token, t)) return fail('Commande introuvable', 404);
       const paid = !UNPAID.includes(o.status);
@@ -56,9 +56,26 @@ Deno.serve(async (req) => {
         db().from('samples').select('reference, product_name, batch_number').eq('order_id', o.id).maybeSingle(),
         db().from('certificates').select('public_id, status').eq('order_id', o.id).maybeSingle(),
       ]);
-      const { access_token: _t, id: _id, ...order } = o;
+      // Autres échantillons payés dans le même panier (même client)
+      let siblings: { reference: string; t: string; sample_reference: string | null; sample_name: string | null; status: string; certificate: string | null }[] = [];
+      if (o.stripe_session_id && o.item_count > 1) {
+        const { data: sib } = await db().from('orders').select('id, reference, access_token, status, item_index')
+          .eq('stripe_session_id', o.stripe_session_id).order('item_index');
+        const ids = (sib ?? []).map((x) => x.id);
+        const [{ data: smps }, { data: certs }] = await Promise.all([
+          db().from('samples').select('order_id, reference, product_name').in('order_id', ids),
+          db().from('certificates').select('order_id, public_id').in('order_id', ids),
+        ]);
+        siblings = (sib ?? []).map((x) => ({
+          reference: x.reference, t: x.access_token, status: x.status,
+          sample_reference: smps?.find((m) => m.order_id === x.id)?.reference ?? null,
+          sample_name: smps?.find((m) => m.order_id === x.id)?.product_name ?? null,
+          certificate: certs?.find((c) => c.order_id === x.id)?.public_id ?? null,
+        }));
+      }
+      const { access_token: _t, id: _id, stripe_session_id: _s, ...order } = o;
       return json({
-        order, sample, certificate: cert,
+        order, sample, certificate: cert, siblings,
         shipping: s ? {
           recipient: s.shipping_recipient, address: s.shipping_address, postal_code: s.shipping_postal_code,
           city: s.shipping_city, country: s.shipping_country, phone: s.shipping_phone, instructions: s.shipping_instructions,
@@ -70,7 +87,8 @@ Deno.serve(async (req) => {
     if (action === 'session') {
       const sid = url.searchParams.get('session_id') ?? '';
       if (!/^cs_[A-Za-z0-9_]+$/.test(sid)) return fail('Session invalide');
-      const { data: o } = await db().from('orders').select('reference, access_token').eq('stripe_session_id', sid).maybeSingle();
+      const { data: o } = await db().from('orders').select('reference, access_token').eq('stripe_session_id', sid)
+        .order('item_index').limit(1).maybeSingle();
       if (o) return json({ ready: true, ref: o.reference, t: o.access_token });
       const session = await stripe<{ payment_status: string }>('GET', `/checkout/sessions/${sid}`).catch(() => null);
       if (!session) return fail('Session inconnue', 404);
