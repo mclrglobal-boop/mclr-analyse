@@ -35,6 +35,7 @@ Deno.serve(async (req) => {
     const session = await stripe<{ url: string }>('POST', '/checkout/sessions', {
       mode: 'payment',
       locale: 'fr',
+      allow_promotion_codes: true, // codes promo créés dans Stripe (Produits › Coupons)
       line_items: [{
         quantity: n,
         price_data: {

@@ -121,7 +121,7 @@ export function Analyse() {
             <button type="submit" disabled={busy} className="btn-primary mt-4 w-full py-3 text-base">{busy ? 'Redirection vers le paiement…' : n > 1 ? `Commander ${n} analyses` : 'Commander cette analyse'}</button>
           </form>
           {err && <div className="mt-3"><Notice tone="error">{err}</Notice></div>}
-          <p className="mt-3 text-center text-xs text-ink-500">Paiement sécurisé par Stripe. Instructions d&apos;envoi affichées après paiement.</p>
+          <p className="mt-3 text-center text-xs text-ink-500">Un code promo ? Saisissez-le sur la page de paiement. Paiement sécurisé par Stripe, instructions d&apos;envoi affichées après paiement.</p>
         </aside>
       </div>
     </div>
