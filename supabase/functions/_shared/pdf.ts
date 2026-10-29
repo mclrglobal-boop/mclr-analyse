@@ -315,7 +315,7 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
   drawQr(page!, M + 10, y - 10 - qs, qs);
   const tx = M + qs + 24;
   text('AUTHENTICITY VERIFICATION  /  VÉRIFICATION D\'AUTHENTICITÉ', tx, y - 20, 8.5, fBold, NAVY);
-  wrap(`Scannez le QR code ou ouvrez le lien ci-dessous : la page affiche les données enregistrées dans la base de ${input.company.name}, le statut (valide / révoqué) et la version en vigueur. Toute différence avec ce document signale une falsification.`, fReg, 7.8, CW - qs - 36)
+  wrap(`Scannez le QR code ou ouvrez le lien ci-dessous : la page affiche les données enregistrées dans la base de ${input.company.name} et le statut du certificat (valide / révoqué). Toute différence avec ce document signale une falsification.`, fReg, 7.8, CW - qs - 36)
     .forEach((l, i) => text(l, tx, y - 34 - i * 10, 7.8, fReg, MUTED));
   text(input.verifyUrl, tx, y - 80, 8.5, fMono, NAVY);
   text(`Certificate ID : ${input.publicId}`, tx, y - 93, 8, fBold, INK);

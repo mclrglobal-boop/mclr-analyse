@@ -1,0 +1,17 @@
+# Temporaire : génère les PDF de certificats en attente (supprimé juste après)
+name: Générer PDF certificats
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/render-tmp.yml']
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for i in $(seq 1 12); do
+            r=$(curl -s -X POST "https://kwuuluxgjfnofgxwvsdp.supabase.co/functions/v1/ingest-tmp?t=c71e4b9a2f058d36e1b7a4c90d2f5e83")
+            echo "$i $r"
+            [ "$r" = "[]" ] && break
+            sleep 2
+          done
