@@ -14,7 +14,7 @@ const pages = {
   confidentialite: ['Politique de confidentialité · MCLR Analyse', null],
   verify: ['Vérifier un certificat d\'analyse · MCLR Analyse', "Vérifiez l'authenticité d'un certificat MCLR Analyse en scannant son QR code ou en saisissant son identifiant COA."],
 };
-const noindex = ['commande', 'commande/succes', 'admin', 'admin/login', 'admin/commandes', 'admin/commande', 'admin/clients', 'admin/produits',
+const noindex = ['pdf', 'commande', 'commande/succes', 'admin', 'admin/login', 'admin/commandes', 'admin/commande', 'admin/clients', 'admin/produits',
   'admin/produit', 'admin/echantillons', 'admin/rapports', 'admin/rapport', 'admin/import', 'admin/certificats', 'admin/certificat',
   'admin/verifications', 'admin/parametres'];
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
