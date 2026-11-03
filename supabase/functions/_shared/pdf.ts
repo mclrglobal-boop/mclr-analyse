@@ -40,6 +40,7 @@ export type CertificatePdfInput = {
   hplcCaption?: string | null;
   msCaption?: string | null;
   sampleImage?: Uint8Array | null;   // photo du flacon (vignette)
+  sourceType?: 'independent' | 'manufacturer' | null; // origine des résultats
 };
 
 // Identité visuelle (propre à la marque — aucun élément repris d'un laboratoire)
@@ -225,7 +226,9 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
   }
   y -= Math.ceil(pairs.length / 2) * (rowH + 4);
   // Source
-  const src = 'Tested by an independent third-party laboratory  ·  Analysé par un laboratoire tiers indépendant';
+  const src = input.sourceType === 'manufacturer'
+    ? "Manufacturer's in-house laboratory (not independent)  ·  Laboratoire interne du fabricant (non indépendant)"
+    : 'Tested by an independent third-party laboratory  ·  Analysé par un laboratoire tiers indépendant';
   page!.drawRectangle({ x: M, y: y - rowH, width: labW, height: rowH, color: NAVY });
   page!.drawRectangle({ x: M + labW, y: y - rowH, width: CW - labW, height: rowH, color: NAVY_SOFT });
   text('Source', M + 7, y - 14.5, 7.5, fBold, WHITE);

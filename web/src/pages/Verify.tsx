@@ -61,6 +61,7 @@ function Result({ id }: { id: string }) {
   );
   const { certificate: c, data: d } = v;
   const valid = v.result === 'valid';
+  const inhouse = (d as { source_type?: string }).source_type === 'manufacturer';
   return (
     <Shell>
       {valid
@@ -85,7 +86,7 @@ function Result({ id }: { id: string }) {
           <Row k="Date d'analyse" en="Analysis date" v={formatDate(d.analysis_date)} />
           <Row k="Méthode" en="Method" v={d.method} />
           <Row k="Résultat" en="Result" v={d.main_result || 'Voir tableau'} strong />
-          <Row k="Source" en="Source" v="Laboratoire tiers indépendant — Independent laboratory report" />
+          <Row k="Source" en="Source" v={inhouse ? "Laboratoire interne du fabricant (non indépendant) — Manufacturer's in-house laboratory" : "Laboratoire tiers indépendant — Independent laboratory report"} />
           <Row k="Date d'émission" en="Issue date" v={formatDate(d.issued_at)} />
           <Row k="Statut" en="Status" v={valid ? 'VALID' : 'REVOKED'} strong tone={valid ? 'text-emerald-700' : 'text-danger'} />
           {!valid && c.revoked_at && <Row k="Révoqué le" en="Revoked" v={formatDateTime(c.revoked_at)} />}
@@ -128,7 +129,7 @@ function Result({ id }: { id: string }) {
       {d.has_pdf && <a href={`/pdf/?id=${c.public_id}`} target="_blank" rel="noopener" className="btn-dark mt-5 w-full py-3">Voir le document (PDF)</a>}
       <div className="mt-5 rounded-xl border border-line bg-white p-5 text-sm leading-relaxed text-ink-700">
         <p className="font-medium text-ink">Ce certificat permet de vérifier les informations enregistrées dans notre base de données.</p>
-        <p className="mt-2">Les résultats proviennent du rapport d&apos;analyse d&apos;un laboratoire tiers indépendant. Le certificat de vérification est émis par MCLR et ne constitue pas un rapport émis par le laboratoire.</p>
+        <p className="mt-2">{inhouse ? 'Les résultats proviennent du rapport du laboratoire interne du fabricant (non indépendant).' : 'Les résultats proviennent du rapport d\'analyse d\'un laboratoire tiers indépendant.'} Le certificat de vérification est émis par MCLR et ne constitue pas un rapport émis par le laboratoire.</p>
         <dl className="mt-4 grid grid-cols-2 gap-3 text-xs text-ink-500">
           <div><dt>Vérifications</dt><dd className="font-semibold text-ink">{c.scan_count}</dd></div>
           <div><dt>Créé le</dt><dd className="font-semibold text-ink">{formatDateTime(c.created_at)}</dd></div>
