@@ -236,6 +236,8 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
   text(src, M + labW + 8, y - 14.5, srcSize, fReg, INK);
   y -= rowH + 18;
 
+  const labWord = input.sourceType === 'manufacturer' ? 'laboratoire interne du fabricant' : 'laboratoire indépendant';
+
   // ---------- Résultats ----------
   section('Test results', 'Résultats');
   const cols = [{ h: 'Test Items / Paramètre', w: 0.40 }, { h: 'Specification / Spécification', w: 0.32 }, { h: 'Result / Résultat', w: 0.28 }];
@@ -280,7 +282,7 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
       page!.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.5, color: LINE });
     });
     y -= 12;
-    text('Valeurs recopiées sans modification depuis le rapport du laboratoire indépendant.', M + 2, y, 7, fReg, MUTED);
+    text(`Valeurs recopiées sans modification depuis le rapport du ${labWord}.`, M + 2, y, 7, fReg, MUTED);
     y -= 18;
   }
 
@@ -294,7 +296,7 @@ export async function generateCertificatePdf(input: CertificatePdfInput): Promis
     page!.drawRectangle({ x: M, y: y - h - 20, width: CW, height: h + 20, borderColor: LINE, borderWidth: 1 });
     page!.drawImage(img, { x: M + (CW - w) / 2, y: y - h - 10, width: w, height: h });
     y -= h + 32;
-    const cap = wrap(caption || 'Source : extrait du rapport du laboratoire indépendant — reproduit sans modification.', fReg, 7, CW - 4);
+    const cap = wrap(caption || `Source : extrait du rapport du ${labWord} — reproduit sans modification.`, fReg, 7, CW - 4);
     cap.forEach((l, i) => text(l, M + 2, y + 4 - i * 9, 7, fReg, MUTED));
     y -= 12 + (cap.length - 1) * 9;
   };

@@ -1,5 +1,5 @@
 // Import, contrôle et validation des rapports ; génération et gestion des certificats
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { adminApi, SITE_URL, supabase } from '../../lib/supabase';
@@ -7,6 +7,7 @@ import { formatDate, formatDateTime, REPORT_STATUS } from '../../lib/format';
 import { useAsync } from '../../lib/useAsync';
 import { Badge, Empty, Field, Flash, Loading, Notice, PageTitle } from '../../components/ui';
 import { formObject, useAction } from './hooks';
+import { archivePdf, cropFigure, readReport, renderPages, setFileInput, type Extracted, type Figure } from '../../lib/reportReader';
 
 const one = <T,>(v: unknown) => (Array.isArray(v) ? v[0] : v) as T;
 type Row = { analyte: string; value: string; unit: string; specification: string };
@@ -30,7 +31,53 @@ export function ImportReport() {
     { analyte: 'Mass Spectrum', value: '', unit: '', specification: 'Conforms to structure' },
   ]);
   const { msg, busy, run } = useAction();
+  const formRef = useRef<HTMLFormElement>(null);
+  const [ai, setAi] = useState<{ busy?: string; err?: string; data?: Extracted; crops?: { fig: Figure; url: string; name: string }[] } | null>(null);
+  const [source, setSource] = useState<'independent' | 'manufacturer'>('independent');
   if (!data) return <Loading />;
+
+  const fileInput = (name: string) => formRef.current?.elements.namedItem(name) as HTMLInputElement | null;
+  const setVal = (name: string, v: string | null | undefined) => {
+    const el = formRef.current?.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | null;
+    if (el && v != null) el.value = v;
+  };
+  const FIG_INPUT = { hplc: 'hplc_image', ms: 'ms_image', vial_photo: 'sample_photo' } as const;
+  const FIG_LABEL = { hplc: 'Chromatogramme HPLC', ms: 'Spectre de masse', vial_photo: 'Photo du flacon' } as const;
+
+  async function onAiFile(file: File | undefined) {
+    if (!file) return;
+    setAi({ busy: 'Préparation du document…' });
+    try {
+      const pages = await renderPages(file);
+      setFileInput(fileInput('original_pdf'), await archivePdf(file));
+      setAi({ busy: 'Lecture du rapport par l’IA (15–40 s)…' });
+      const d = await readReport(pages);
+      const date = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '');
+      setVal('product_name', d.product_name); setVal('batch_number', d.batch_number ?? '');
+      setVal('appearance', d.appearance ?? ''); setVal('cas_number', d.cas_number ?? '');
+      setVal('received_date', date(d.received_date)); setVal('analysis_date', date(d.analysis_date));
+      setVal('laboratory_name', d.laboratory_name); setVal('laboratory_report_number', d.laboratory_report_number ?? '');
+      setVal('method', d.method); setVal('purity_result', d.purity_result ?? ''); setVal('purity_specification', d.purity_specification ?? '');
+      setVal('observations', d.observations ?? '');
+      setRows(d.additional_results.map((r) => ({ analyte: r.analyte, value: r.value, unit: '', specification: r.specification ?? '' })));
+      setSource(d.source_type === 'manufacturer' ? 'manufacturer' : 'independent');
+      // Un seul cadre par type (le premier), recadré dans la page en haute définition
+      const crops: { fig: Figure; url: string; name: string }[] = [];
+      for (const kind of ['hplc', 'ms', 'vial_photo'] as const) {
+        const fig = d.figures.find((f) => f.kind === kind);
+        const input = fileInput(FIG_INPUT[kind]);
+        if (!fig) { setFileInput(input, null); continue; }
+        const f = await cropFigure(pages, fig);
+        setFileInput(input, f);
+        crops.push({ fig, url: URL.createObjectURL(f), name: FIG_INPUT[kind] });
+      }
+      setAi({ data: d, crops });
+    } catch (e) { setAi({ err: (e as Error).message }); }
+  }
+  function dropCrop(name: string) {
+    setFileInput(fileInput(name), null);
+    setAi((a) => (a ? { ...a, crops: a.crops?.filter((c) => c.name !== name) } : a));
+  }
   const order = data.orders.find((o) => o.id === orderId);
   const smp = one<{ reference: string; product_name: string | null; batch_number: string | null } | undefined>(order?.samples);
   const set = (i: number, k: keyof Row, v: string) => setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
@@ -40,10 +87,36 @@ export function ImportReport() {
       <Flash msg={msg} />
       <PageTitle eyebrow="Rapports laboratoire" title="Importer une analyse" />
       <div className="mb-6"><Notice>Recopiez les valeurs <b>exactement</b> comme dans le rapport du laboratoire. Le rapport devra ensuite être vérifié et validé avant de générer le certificat.</Notice></div>
-      <form className="space-y-6" onSubmit={(e) => {
+      <section className="card mb-6 space-y-3 border-brand-100 p-6">
+        <h2 className="font-semibold">Lecture automatique du rapport (IA)</h2>
+        <p className="text-sm text-ink-500">Déposez le rapport du laboratoire (PDF, ou capture PNG/JPEG) : le formulaire est rempli automatiquement, graphiques et photo recadrés. <b>Contrôlez chaque valeur</b> avant d&apos;importer.</p>
+        <input type="file" accept="application/pdf,.pdf,image/png,image/jpeg" disabled={!!ai?.busy} onChange={(e) => onAiFile(e.target.files?.[0])} className={fileCls} />
+        {ai?.busy && <Notice>{ai.busy}</Notice>}
+        {ai?.err && <Notice tone="error">{ai.err}</Notice>}
+        {ai?.data && (
+          <div className="space-y-3">
+            <Notice tone="success">Formulaire pré-rempli. Vérifiez les valeurs ci-dessous en les comparant au rapport, puis importez.</Notice>
+            {ai.data.source_type === 'manufacturer' && <Notice tone="error"><b>Laboratoire interne du fabricant détecté</b> — ce rapport n&apos;est pas un test tiers indépendant. Le certificat portera la mention « Laboratoire interne du fabricant (non indépendant) ».{ai.data.source_evidence && <><br /><i>« {ai.data.source_evidence} »</i></>}</Notice>}
+            {ai.data.warnings.length > 0 && <Notice tone="warn"><b>Points à vérifier :</b><ul className="mt-1 list-disc pl-5">{ai.data.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul></Notice>}
+            {!!ai.crops?.length && (
+              <div className="grid gap-3 sm:grid-cols-3">
+                {ai.crops.map((c) => (
+                  <figure key={c.name} className="rounded-lg border border-line p-2">
+                    <img src={c.url} alt={FIG_LABEL[c.fig.kind]} className="max-h-40 w-full rounded object-contain" />
+                    <figcaption className="mt-1 flex items-center justify-between text-xs"><span>{FIG_LABEL[c.fig.kind]}</span><button type="button" onClick={() => dropCrop(c.name)} className="text-danger underline">Retirer</button></figcaption>
+                    {c.fig.branding_inside && <div className="mt-1 text-xs text-amber-800">Un élément du laboratoire peut rester visible : remplacez l&apos;image si besoin.</div>}
+                  </figure>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+      <form ref={formRef} className="space-y-6" onSubmit={(e) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
         fd.set('additional_results', JSON.stringify(rows.filter((r) => r.analyte && r.value)));
+        fd.set('source_type', source);
         run('report.import', fd, (r) => r.report_id && nav(`/admin/rapport/?id=${r.report_id}`));
       }}>
         <section className="card space-y-4 p-6">
@@ -70,6 +143,12 @@ export function ImportReport() {
             <Field label="N° du rapport"><input name="laboratory_report_number" className="input font-mono" /></Field>
             <Field label="Méthode"><input name="method" required defaultValue="HPLC-UV / LC-MS" className="input" /></Field>
           </div>
+          <Field label="Origine des résultats (affichée sur le certificat)">
+            <select value={source} onChange={(e) => setSource(e.target.value as 'independent' | 'manufacturer')} className="input">
+              <option value="independent">Laboratoire tiers indépendant</option>
+              <option value="manufacturer">Laboratoire interne du fabricant (non indépendant)</option>
+            </select>
+          </Field>
         </section>
         <section className="card space-y-4 p-6">
           <h2 className="font-semibold">Résultats</h2>
@@ -97,10 +176,11 @@ export function ImportReport() {
           <Field label="Observations"><textarea name="observations" rows={2} className="input" /></Field>
         </section>
         <section className="card space-y-3 p-6">
-          <h2 className="font-semibold">Graphiques (facultatif)</h2>
+          <h2 className="font-semibold">Graphiques et photo (facultatif)</h2>
           <p className="text-sm text-ink-500">Captures recadrées <b>uniquement sur le graphique</b> : aucun logo, en-tête, filigrane ni nom du laboratoire. PNG ou JPEG.</p>
           <Field label="Chromatogramme HPLC"><input type="file" name="hplc_image" accept="image/png,image/jpeg" className={fileCls} /></Field>
           <Field label="Spectre de masse"><input type="file" name="ms_image" accept="image/png,image/jpeg" className={fileCls} /></Field>
+          <Field label="Photo du flacon testé (Pack Sérénité)"><input type="file" name="sample_photo" accept="image/png,image/jpeg" className={fileCls} /></Field>
         </section>
         <section className="card space-y-3 p-6">
           <h2 className="font-semibold">PDF original du laboratoire</h2>
@@ -135,7 +215,8 @@ export function ReportDetail() {
     ['Aspect', r.appearance], ['N° CAS', r.cas_number], ['Réception', formatDate(r.received_date)], ["Date d'analyse", formatDate(r.analysis_date)],
     ['Laboratoire (interne)', r.laboratory_name], ['N° rapport', r.laboratory_report_number], ['Méthode', r.method],
     ['Pureté HPLC', r.purity_result ? `${r.purity_result}${r.purity_specification ? `  (spéc. ${r.purity_specification})` : ''}` : null],
-    ['Graphiques', [r.hplc_image_path && 'HPLC', r.ms_image_path && 'spectre de masse'].filter(Boolean).join(', ') || null], ['Observations', r.observations],
+    ['Origine', r.source_type === 'manufacturer' ? 'Laboratoire interne du fabricant (non indépendant)' : 'Laboratoire tiers indépendant'],
+    ['Graphiques / photo', [r.hplc_image_path && 'HPLC', r.ms_image_path && 'spectre de masse', r.sample_photo_path && 'photo du flacon'].filter(Boolean).join(', ') || null], ['Observations', r.observations],
   ];
   async function openPdf() {
     try { const { url } = await adminApi<{ url: string }>('file.lab', { report_id: r!.id }); setPdfUrl(url); } catch (e) { alert((e as Error).message); }

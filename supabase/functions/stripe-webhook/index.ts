@@ -1,7 +1,9 @@
 // Webhook Stripe : signature vérifiée, idempotent (événement + session/échantillon), commandes → emails → bons de commande labo
 // Un paiement peut couvrir plusieurs échantillons : une commande (un échantillon, un certificat) est créée par échantillon.
+// Le compte Stripe sert aussi à d'autres ventes (liens de paiement…) : les sessions sans métadonnée product_id sont ignorées (200),
+// sinon Stripe considère l'endpoint en échec et finit par le désactiver.
 import { db, formatMoney, getSettings, json, siteUrl, type Settings } from '../_shared/core.ts';
-import { verifyStripeSignature } from '../_shared/stripe.ts';
+import { stripe, verifyStripeSignature } from '../_shared/stripe.ts';
 import { emails, sendLabOrder } from '../_shared/email.ts';
 
 type Session = {
@@ -12,10 +14,37 @@ type Session = {
 };
 type OrderRow = { id: string; reference: string; customer_email: string; product_name: string; access_token: string; amount_cents: number; currency: string; serenite: boolean; item_index: number };
 const ORDER_COLS = 'id, reference, customer_email, product_name, access_token, amount_cents, currency, serenite, item_index';
+const RESYNC_TOKEN = Deno.env.get('RESYNC_TOKEN') ?? ''; // secret Supabase (rattrapage manuel), désactivé si absent
+type Step = 'confirm' | 'shipping' | 'lab';
+const ALL_STEPS: Step[] = ['confirm', 'shipping', 'lab'];
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
   const raw = await req.text();
+
+  // Rattrapage d'une session payée non reçue (session relue depuis l'API Stripe, traitement idempotent)
+  // { session_id, resend?: ['confirm'|'shipping'|'lab'] } : resend renvoie ces étapes pour des commandes déjà créées
+  if (RESYNC_TOKEN && req.headers.get('x-resync-token') === RESYNC_TOKEN) {
+    try {
+      const { session_id, resend } = JSON.parse(raw);
+      if (!/^cs_(live|test)_[A-Za-z0-9]+$/.test(String(session_id ?? ''))) return json({ error: 'session_id invalide' }, 400);
+      const s = await getSettings();
+      const site = siteUrl(s);
+      if (Array.isArray(resend) && resend.length) {
+        const { data } = await db().from('orders').select(ORDER_COLS).eq('stripe_session_id', session_id);
+        if (!data?.length) return json({ error: 'aucune commande pour cette session' }, 404);
+        const r = await afterPayment(data as OrderRow[], site, s, resend.filter((x: string) => ALL_STEPS.includes(x as Step)) as Step[]);
+        return json({ resent: true, ...r });
+      }
+      const session = await stripe<Session>('GET', `/checkout/sessions/${session_id}`);
+      const r = await onCompleted(session, site, s);
+      return json({ resynced: true, ...r });
+    } catch (e) {
+      console.error('[stripe-webhook resync]', e);
+      return json({ error: (e as Error).message }, 500);
+    }
+  }
+
   const secret = Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '';
   if (!secret || !(await verifyStripeSignature(raw, req.headers.get('stripe-signature'), secret))) {
     return json({ error: 'Signature invalide' }, 400);
@@ -61,8 +90,10 @@ Deno.serve(async (req) => {
 async function onCompleted(session: Session, site: string, s: Settings) {
   const base = db();
   const md = session.metadata ?? {};
-  const { data: product } = await base.from('products').select('id, name').eq('id', md.product_id ?? '').maybeSingle();
-  if (!product) throw new Error(`Produit introuvable (session ${session.id})`);
+  // Vente hors site MCLR (lien de paiement, autre boutique) : rien à faire
+  if (!md.product_id) return { ignored: true, created: 0 };
+  const { data: product } = await base.from('products').select('id, name').eq('id', md.product_id).maybeSingle();
+  if (!product) { console.warn(`[stripe-webhook] produit inconnu ${md.product_id} (session ${session.id})`); return { ignored: true, created: 0 }; }
   const email = session.customer_details?.email || session.customer_email;
   if (!email) throw new Error(`Email client absent (session ${session.id})`);
   const paid = session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
@@ -102,10 +133,11 @@ async function onCompleted(session: Session, site: string, s: Settings) {
     created.push(order);
   }
   if (paid && created.length) await afterPayment(created, site, s);
+  return { ignored: false, created: created.length, references: created.map((o) => o.reference) };
 }
 
 /** Emails client groupés (un seul envoi pour tout le panier) + un bon de commande labo par échantillon. */
-async function afterPayment(orders: OrderRow[], site: string, s: Settings) {
+async function afterPayment(orders: OrderRow[], site: string, s: Settings, steps: Step[] = ALL_STEPS) {
   orders.sort((a, b) => a.item_index - b.item_index);
   const { data: smps } = await db().from('samples').select('order_id, reference, product_name, batch_number').in('order_id', orders.map((o) => o.id));
   const items = orders.map((o) => {
@@ -115,10 +147,17 @@ async function afterPayment(orders: OrderRow[], site: string, s: Settings) {
   const main = orders[0];
   const amount = orders.reduce((t, o) => t + o.amount_cents, 0);
   const m = emails(site, s);
-  await m.orderConfirmed({ ...main, amount: formatMoney(amount, main.currency) }, items);
-  await m.shippingInstructions({ ...main, sample_reference: items[0].sample_reference }, items);
-  for (const o of orders) {
-    const r = await sendLabOrder(site, s, o.id);
-    if (!r.sent) console.warn(`[lab-order] ${o.reference} : ${r.reason}`);
+  const out: Record<string, unknown> = {};
+  if (steps.includes('confirm')) out.confirm = (await m.orderConfirmed({ ...main, amount: formatMoney(amount, main.currency) }, items)).ok;
+  if (steps.includes('shipping')) out.shipping = (await m.shippingInstructions({ ...main, sample_reference: items[0].sample_reference }, items)).ok;
+  if (steps.includes('lab')) {
+    const lab: unknown[] = [];
+    for (const o of orders) {
+      const r = await sendLabOrder(site, s, o.id);
+      if (!r.sent) console.warn(`[lab-order] ${o.reference} : ${r.reason}`);
+      lab.push({ ref: o.reference, ...r });
+    }
+    out.lab = lab;
   }
+  return out;
 }

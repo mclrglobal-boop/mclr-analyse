@@ -53,7 +53,8 @@ export async function send(to: string, subject: string, html: string, opts: { re
     console.error('[email] échec', to, (e as Error).message);
     return { ok: false };
   } finally {
-    await client.close().catch(() => {});
+    // close() peut renvoyer undefined (pas une promesse) : ne jamais faire planter l'envoi ici
+    try { await client.close(); } catch { /* ignoré */ }
   }
 }
 

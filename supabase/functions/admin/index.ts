@@ -4,6 +4,7 @@ import { corsHeaders, db, fail, getSettings, json, logAdmin, sha256Hex, siteUrl,
 import { sendLabOrder, setOrderStatus } from '../_shared/email.ts';
 import { stripe } from '../_shared/stripe.ts';
 import { generateCertificatePdf } from '../_shared/pdf.ts';
+import { extractReport } from '../_shared/extract.ts';
 
 type Admin = { id: string; email: string };
 type Input = Record<string, string | File | undefined>;
@@ -222,6 +223,15 @@ Deno.serve(async (req) => {
       }
 
       // ---------------- Rapports laboratoire ----------------
+      case 'report.extract': {
+        // Lecture IA : images des pages du rapport (JPEG/PNG base64) → champs pré-remplis, à contrôler avant import
+        const pages = Array.isArray((input as Record<string, unknown>).pages) ? (input as Record<string, unknown>).pages as string[] : [];
+        if (!pages.length || pages.length > 8) throw new Error('1 à 8 pages attendues');
+        const data = await extractReport(pages);
+        await logAdmin(admin.id, 'report.extract', 'laboratory_report', null, { pages: pages.length, product: data.product_name ?? null });
+        return json({ ok: 'Rapport lu', data });
+      }
+
       case 'report.import': {
         const orderId = uuid(input.order_id, 'order_id');
         const productName = txt(input.product_name, 200), labName = txt(input.laboratory_name, 200), method = txt(input.method, 200);
@@ -233,7 +243,7 @@ Deno.serve(async (req) => {
           .filter((r) => r.analyte && r.value);
 
         const pdf = await pdfBytes(input.original_pdf);
-        const hplc = await imageBytes(input.hplc_image), ms = await imageBytes(input.ms_image);
+        const hplc = await imageBytes(input.hplc_image), ms = await imageBytes(input.ms_image), photo = await imageBytes(input.sample_photo);
         const { data: sample } = await base.from('samples').select('id').eq('order_id', orderId).single();
         if (!sample) throw new Error('Échantillon introuvable pour cette commande');
 
@@ -242,9 +252,9 @@ Deno.serve(async (req) => {
         const { error: upErr } = await base.storage.from('lab-reports').upload(pdfPath, pdf, { contentType: 'application/pdf', upsert: false });
         if (upErr) throw new Error(`Upload : ${upErr.message}`);
         const images: Record<string, string> = {};
-        for (const [key, img] of [['hplc_image_path', hplc], ['ms_image_path', ms]] as const) {
+        for (const [key, img] of [['hplc_image_path', hplc], ['ms_image_path', ms], ['sample_photo_path', photo]] as const) {
           if (!img) continue;
-          const p = `reports/${reportId}/${key.replace('_image_path', '')}.${img.ext}`;
+          const p = `reports/${reportId}/${key.replace('_image_path', '').replace('sample_photo_path', 'photo')}.${img.ext}`;
           const { error } = await base.storage.from('certificates').upload(p, img.b, { contentType: img.type });
           if (error) throw new Error(`Upload image : ${error.message}`);
           images[key] = p;
@@ -258,6 +268,8 @@ Deno.serve(async (req) => {
           method, purity_result: opt(input.purity_result, 200), additional_results: extra, observations: opt(input.observations, 4000),
           original_pdf_path: pdfPath, original_pdf_sha256: await sha256Hex(pdf), original_pdf_filename: (input.original_pdf as File).name.slice(0, 200),
           created_by: admin.id, ...images,
+          source_type: input.source_type === 'manufacturer' ? 'manufacturer' : 'independent',
+          hplc_caption: opt(input.hplc_caption, 300), ms_caption: opt(input.ms_caption, 300),
         });
         if (error) throw new Error(error.message);
         await base.from('samples').update({ status: 'analyzed', product_name: productName, batch_number: batch }).eq('id', sample.id);
